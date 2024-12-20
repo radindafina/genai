@@ -2,7 +2,7 @@ import streamlit as st
 from PIL import Image
 import os
 from openai import AzureOpenAI
-import fitz 
+import fitz  # PyMuPDF
 import shutil
 import base64
 import re
@@ -12,26 +12,31 @@ AZURE_API_KEY = "6a13a95bf6774542a24b438b9d98dd42"
 AZURE_ENDPOINT = "https://my-dna-openai-2.openai.azure.com/"
 AZURE_DEPLOYMENT_ID = "2024-08-01-preview"
 
+# Function to encode image to Base64
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
   
-def pdf_to_images(pdf_path, output_folder, dpi=300):
+# Function to convert PDF to images
+def pdf_to_images(pdf_file, output_folder, dpi=300):
+    # Clean up the output folder if it exists
     try:
         shutil.rmtree(output_folder)
-    except:
-        # Do nothing if directory does not exist
+    except FileNotFoundError:
         pass
 
     os.makedirs(output_folder, exist_ok=True)
-    pdf_document = fitz.open(pdf_path)
+
+    # Open the uploaded PDF stream instead of filename
+    pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
     for page_num in range(pdf_document.page_count):
         page = pdf_document.load_page(page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))  # Increase DPI for better resolution
+        pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))  # Adjust DPI for resolution
         image_path = os.path.join(output_folder, f'page_{page_num + 1}.png')
         pix.save(image_path)
         print(f'Saved: {image_path}')
 
+# Function to convert images in a folder to Base64
 def get_base64_images(directory):
     base64_images = []
     for filename in os.listdir(directory):
@@ -41,14 +46,16 @@ def get_base64_images(directory):
                 base64_images.append(base64_image)
     return base64_images
 
-def extract_text_from_pdf(pdf_path):
+# Function to extract text from PDF
+def extract_text_from_pdf(pdf_file):
     text = ""
-    pdf_document = fitz.open(pdf_path)
+    pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
     for page_num in range(pdf_document.page_count):
         page = pdf_document.load_page(page_num)
         text += page.get_text("text")  # Extract raw text
     return text
 
+# Function to create the message structure for Azure OpenAI
 def create_message(system_prompt, user_prompt, base64_images):
     message = [
         {"role": "system", "content": system_prompt},
@@ -60,9 +67,9 @@ def create_message(system_prompt, user_prompt, base64_images):
             "type": "image_url",
             "image_url": {"url": f"data:image/png;base64,{base64_image}", "detail": "high"}
         })
-    
     return message
 
+# Function to analyze the document with Azure OpenAI
 def analyzing_document_with_prompt(system_prompt, user_prompt, message_structure):
     llm = AzureOpenAI(
         api_version=AZURE_DEPLOYMENT_ID,
@@ -75,7 +82,6 @@ def analyzing_document_with_prompt(system_prompt, user_prompt, message_structure
         temperature=0,
         max_tokens=4000
     )
-    
     extracted_content = response.choices[0].message.content
 
     # Split content into sections using regex
@@ -92,29 +98,38 @@ def analyzing_document_with_prompt(system_prompt, user_prompt, message_structure
         else:
             st.write(section_content)  
 
+# Streamlit App
 st.title("Extraction of MPC file(s)")
 
+# File uploader
 uploaded_file = st.file_uploader("Choose a PDF...", type=["pdf"])
 
 if uploaded_file is not None:
-    print(uploaded_file.name)
-    pdf_to_images(uploaded_file.name, "output_images", dpi=300)
+    st.info("PDF Uploaded Successfully!")
     
-    # Extract text directly from PDF for better accuracy
-    pdf_text = extract_text_from_pdf(uploaded_file.name)
-    st.write("Extracted Text from PDF:")
+    # Convert PDF pages to images
+    output_folder = "output_images"
+    pdf_to_images(uploaded_file, output_folder, dpi=300)
+
+    # Extract text directly from the uploaded PDF
+    st.subheader("Extracted Text from PDF:")
+    pdf_text = extract_text_from_pdf(uploaded_file)
     st.write(pdf_text)
     
+    # User prompt input
     prompt = st.text_input("Enter prompt for analysis")
     
     if st.button("Analyze"):
-        full_prompt = f"Analyze the following document: {prompt}"
+        st.info("Analyzing document...")
         
-        # Get base64 images for analysis
-        directory_path = './output_images/'  
-        base64_images = get_base64_images(directory_path)
-
-        system_prompt = "You are a data extraction specialist skilled at extracting and organizing information into structured tables. Your task is to carefully analyze and extract all available information from the provided images, no matter the format or structure."
+        # Base64-encode the extracted images
+        base64_images = get_base64_images(output_folder)
+        
+        system_prompt = (
+            "You are a data extraction specialist skilled at extracting and organizing information "
+            "into structured tables. Your task is to carefully analyze and extract all available "
+            "information from the provided images, no matter the format or structure."
+        )
         
         user_prompt = """
         Please analyze the provided images and extract all available data.
@@ -125,8 +140,8 @@ if uploaded_file is not None:
         4. If the data has varying formats, adapt the extraction approach accordingly. For example:
             - If the data is presented as a list, structure it in a table with appropriate column labels.
             - If the data is fragmented or unclear, still attempt to extract it to the best of your ability, indicating any missing or unclear parts as 'Unreadable'.
-            - Tables with irregular row/column formats should be corrected, ensuring a consistent and clear tabular structure.
-        5. For any data that is not recognized or legible, write 'Unreadable' and explain in detail why the data could not be extracted. If there's ambiguity in the data, note the ambiguity clearly.
+        5. For any data that is not recognized or legible, write 'Unreadable' and explain in detail why the data could not be extracted.
+
 
         Format example for sections:
 
@@ -143,7 +158,10 @@ if uploaded_file is not None:
         | Value 9   | Unreadable| Value 10  |
         """
 
+        # Create the message structure for Azure OpenAI
         message_structure = create_message(system_prompt, user_prompt, base64_images)
-        analysis = analyzing_document_with_prompt(system_prompt, user_prompt, message_structure)
+        
+        # Analyze the document
+        analyzing_document_with_prompt(system_prompt, user_prompt, message_structure)
         
 
