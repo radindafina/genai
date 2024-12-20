@@ -1,3 +1,5 @@
+output_folder = "output_images"
+
 import streamlit as st
 from PIL import Image
 import os
@@ -12,6 +14,9 @@ AZURE_API_KEY = "6a13a95bf6774542a24b438b9d98dd42"
 AZURE_ENDPOINT = "https://my-dna-openai-2.openai.azure.com/"
 AZURE_DEPLOYMENT_ID = "2024-08-01-preview"
 
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+    
 # Function to encode image to Base64
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
