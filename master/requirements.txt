@@ -2,5 +2,3 @@ streamlit
 pillow
 openai
 pymupdf
-base64
-re
