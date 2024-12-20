@@ -17,24 +17,20 @@ def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
   
-# Function to convert PDF to images
-def pdf_to_images(pdf_file, output_folder, dpi=300):
-    # Clean up the output folder if it exists
-    try:
-        shutil.rmtree(output_folder)
-    except FileNotFoundError:
-        pass
+def pdf_to_images(pdf_file_bytes, output_folder, dpi=300):
+    # Open PDF directly using bytes
+    pdf_document = fitz.open(stream=pdf_file_bytes, filetype="pdf")
 
-    os.makedirs(output_folder, exist_ok=True)
+    for page_number in range(pdf_document.page_count):
+        page = pdf_document.load_page(page_number)
+        pix = page.get_pixmap(dpi=dpi)
 
-    # Open the uploaded PDF stream instead of filename
-    pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    for page_num in range(pdf_document.page_count):
-        page = pdf_document.load_page(page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))  # Adjust DPI for resolution
-        image_path = os.path.join(output_folder, f'page_{page_num + 1}.png')
-        pix.save(image_path)
-        print(f'Saved: {image_path}')
+        # Save the image to the output folder
+        image_filename = f"{output_folder}/page_{page_number + 1}.png"
+        pix.save(image_filename)
+
+    pdf_document.close()
+
 
 # Function to convert images in a folder to Base64
 def get_base64_images(directory):
