@@ -48,16 +48,23 @@ def get_base64_images(directory):
 
 def extract_text_from_pdf(uploaded_file):
     text = ""
-    # Read the uploaded PDF file into bytes
-    pdf_bytes = uploaded_file.read()
+    if uploaded_file is not None:
+        # Read the uploaded file only once and store the bytes
+        uploaded_file_bytes = uploaded_file.getvalue()
 
-    # Open the PDF using PyMuPDF from the byte stream
-    pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        if not uploaded_file_bytes:
+            raise ValueError("The uploaded file is empty.")
 
-    for page_num in range(pdf_document.page_count):
-        page = pdf_document.load_page(page_num)
-        text += page.get_text("text")  # Extract raw text
+        # Open the PDF using PyMuPDF from the byte stream
+        pdf_document = fitz.open(stream=uploaded_file_bytes, filetype="pdf")
+
+        # Extract text from each page
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document.load_page(page_num)
+            text += page.get_text("text")
+
     return text
+
 
 # Function to create the message structure for Azure OpenAI
 def create_message(system_prompt, user_prompt, base64_images):
@@ -109,15 +116,13 @@ st.title("Extraction of MPC file(s)")
 uploaded_file = st.file_uploader("Choose a PDF...", type=["pdf"])
 
 if uploaded_file is not None:
-    st.info("PDF Uploaded Successfully!")
-    
-    # Convert PDF pages to images
-    output_folder = "output_images"
-    pdf_to_images(uploaded_file, output_folder, dpi=300)
+    uploaded_file_bytes = uploaded_file.getvalue()  # Read file bytes once
 
-    # Extract text directly from the uploaded PDF
-    st.subheader("Extracted Text from PDF:")
-    pdf_text = extract_text_from_pdf(uploaded_file)
+    # Pass the file content to PDF processing
+    pdf_to_images(uploaded_file_bytes, "output_images", dpi=300)
+    pdf_text = extract_text_from_pdf(uploaded_file)  # Process the bytes
+
+    st.write("Extracted Text from PDF:")
     st.write(pdf_text)
     
     # User prompt input
