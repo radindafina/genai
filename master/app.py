@@ -100,9 +100,9 @@ if uploaded_file is not None:
     with open(f"temp_{uploaded_file.name}", "wb") as temp_pdf:
         temp_pdf.write(uploaded_file.read())
          
-    pdf_to_images(uploaded_file.name, "output_images", dpi=300)
+    pdf_to_images(f"temp_{uploaded_file.name}", "output_images", dpi=300)
     
-    pdf_text = extract_text_from_pdf(uploaded_file.name)
+    pdf_text = extract_text_from_pdf(f"temp_{uploaded_file.name}")
     st.write("Extracted Text from PDF:")
     st.write(pdf_text)
     
