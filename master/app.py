@@ -97,7 +97,7 @@ uploaded_file = st.file_uploader("Choose a PDF...", type=["pdf"])
 
 if uploaded_file is not None:
     st.write(f"Processing file: {uploaded_file.name}")
-     with open(f"temp_{uploaded_file.name}", "wb") as temp_pdf:
+    with open(f"temp_{uploaded_file.name}", "wb") as temp_pdf:
         temp_pdf.write(uploaded_file.read())
          
     pdf_to_images(uploaded_file.name, "output_images", dpi=300)
